@@ -1,6 +1,6 @@
 #adding A record with geo
 resource "cloudns_dns_record" "A-record-test-geo" {
-  name     = "Arecord"
+  name     = "A1record"
   zone     = "asdasd.com"
   geodnslocation = "5"
   type     = "A"
@@ -10,7 +10,7 @@ resource "cloudns_dns_record" "A-record-test-geo" {
 
 #adding A record with default geo
 resource "cloudns_dns_record" "A-record-test" {
-  name     = "Arecord"
+  name     = "A2record"
   zone     = "asdasd.com"
   type     = "A"
   value     = "1.2.3.5"
