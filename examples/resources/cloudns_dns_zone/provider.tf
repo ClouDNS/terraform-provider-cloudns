@@ -1,14 +1,14 @@
 terraform {
   required_providers {
     cloudns = {
-      source = "registry.terraform.io/ClouDNS/terraform-provider-cloudns"
+      source = "cloudns/cloudns"
       version = "1.0.0"
     }
   }
 }
 
 provider "cloudns" {
-  auth_id = 8625
+  auth_id = 21670
   password = "123456"
   rate_limit = 10
 }

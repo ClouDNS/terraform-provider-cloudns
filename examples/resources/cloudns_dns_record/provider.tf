@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "cloudns" {
-  sub_auth_id = 20821
-  password = "123456"
+  sub_auth_id = xxxx
+  password = "xxxx"
   rate_limit = 10
 }

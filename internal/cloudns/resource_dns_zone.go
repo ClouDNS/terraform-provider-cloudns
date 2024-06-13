@@ -3,6 +3,7 @@ package cloudns
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/ClouDNS/cloudns-go"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -64,16 +65,20 @@ func resourceDnsZoneRead(ctx context.Context, d *schema.ResourceData, meta inter
 	clientConfig.rateLimiter.Take()
 	zoneRead, err := lookup.Read(&clientConfig.apiAccess)
 	if err != nil {
+		if isNotFoundErr(err) {
+			d.SetId("")
+			return nil
+		}
 		return diag.FromErr(err)
 	}
 
 	if zoneRead.Domain != "" {
 		d.Set("domain", zoneRead.Domain)
 		d.Set("type", zoneRead.Ztype)
+	} else {
+		d.SetId("")
 	}
 
-	d.Set("domain", "")
-	d.Set("type", "")
 	return nil
 }
 
@@ -106,4 +111,8 @@ func toApiZone(d *schema.ResourceData) cloudns.Zone {
 		Ztype:  zoneType,
 		Master: master,
 	}
+}
+
+func isNotFoundErr(err error) bool {
+	return strings.Contains(err.Error(), "not found")
 }
