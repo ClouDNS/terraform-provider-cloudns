@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "cloudns" {
-  auth_id = 21670
-  password = "123456"
+  auth_id = xxxx
+  password = "xxxx"
   rate_limit = 10
 }
