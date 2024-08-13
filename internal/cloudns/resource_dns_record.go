@@ -14,7 +14,6 @@ import (
 
 func resourceDnsRecord() *schema.Resource {
 	return &schema.Resource{
-		// This description is used by the documentation generator and the language server.
 		Description: "A simple DNS record.",
 
 		CreateContext: resourceDnsRecordCreate,
@@ -27,8 +26,6 @@ func resourceDnsRecord() *schema.Resource {
 			StateContext: resourceDnsRecordImport,
 		},
 
-		// Naming **does not** follow the scheme used by ClouDNS, due to how comically misleading and unclear it is
-		// see: https://www.cloudns.net/wiki/article/58/ for the relevant "vanilla" schema on ClouDNS side
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Description: "The name of the record",
