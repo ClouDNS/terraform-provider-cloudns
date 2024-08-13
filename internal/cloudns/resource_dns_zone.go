@@ -20,6 +20,10 @@ func resourceDnsZone() *schema.Resource {
 		UpdateContext: resourceDnsZoneUpdate,
 		DeleteContext: resourceDnsZoneDelete,
 
+		Importer: &schema.ResourceImporter{
+			StateContext: resourceDnsZoneImport,
+		},
+
 		Schema: map[string]*schema.Schema{
 			"domain": {
 				Description: "The name of the DNS zone.",
@@ -100,6 +104,55 @@ func resourceDnsZoneDelete(ctx context.Context, d *schema.ResourceData, meta int
 	tflog.Debug(ctx, fmt.Sprintf("Delete DNS zone: %s, type: %s", resp.Domain, resp.Ztype))
 
 	d.SetId("")
+	return nil
+}
+
+func resourceDnsZoneImport(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	config := meta.(ClientConfig)
+	domain := d.Id()
+
+	config.rateLimiter.Take()
+	zoneRead, err := cloudns.Zone{Domain: domain}.Read(&config.apiAccess)
+	if err != nil {
+		return nil, err
+	}
+
+	if zoneRead.Domain == "" {
+		return nil, fmt.Errorf("Zone not found: %#v", domain)
+	}
+
+	err = updateZoneState(d, &zoneRead)
+	if err != nil {
+		return nil, err
+	}
+	d.SetId(domain)
+
+	tflog.Debug(ctx, fmt.Sprintf("IMPORT Zone %s", domain))
+
+	return []*schema.ResourceData{d}, nil
+}
+
+func updateZoneState(d *schema.ResourceData, zone *cloudns.Zone) error {
+	if err := d.Set("domain", zone.Domain); err != nil {
+		return err
+	}
+
+	if err := d.Set("type", zone.Ztype); err != nil {
+		return err
+	}
+
+	if len(zone.Ns) > 0 {
+		if err := d.Set("ns", zone.Ns); err != nil {
+			return err
+		}
+	}
+
+	if zone.Ztype == "slave" && zone.Master != "" {
+		if err := d.Set("master", zone.Master); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
