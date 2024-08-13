@@ -66,19 +66,21 @@ func resourceDnsZoneRead(ctx context.Context, d *schema.ResourceData, meta inter
 	zoneRead, err := lookup.Read(&clientConfig.apiAccess)
 	if err != nil {
 		if isNotFoundErr(err) {
+			tflog.Warn(ctx, fmt.Sprintf("DNS zone not found: %s. Removing from state.", lookup.Domain))
 			d.SetId("")
 			return nil
 		}
 		return diag.FromErr(err)
 	}
 
-	if zoneRead.Domain != "" {
-		d.Set("domain", zoneRead.Domain)
-		d.Set("type", zoneRead.Ztype)
-	} else {
+	if zoneRead.Domain == "" {
+		tflog.Warn(ctx, fmt.Sprintf("Received unexpected empty response for DNS zone: %s. Removing from state.", lookup.Domain))
 		d.SetId("")
+		return nil
 	}
 
+	d.Set("domain", zoneRead.Domain)
+	d.Set("type", zoneRead.Ztype)
 	return nil
 }
 
@@ -114,5 +116,5 @@ func toApiZone(d *schema.ResourceData) cloudns.Zone {
 }
 
 func isNotFoundErr(err error) bool {
-	return strings.Contains(err.Error(), "not found")
+	return strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no zones returned")
 }

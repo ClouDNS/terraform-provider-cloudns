@@ -1,7 +1,7 @@
 module github.com/ClouDNS/terraform-provider-cloudns
 
 require (
-	github.com/ClouDNS/cloudns-go v1.0.1
+	github.com/ClouDNS/cloudns-go v1.0.3
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/terraform-plugin-docs v0.19.4
 	github.com/hashicorp/terraform-plugin-log v0.9.0

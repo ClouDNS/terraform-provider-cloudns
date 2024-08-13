@@ -402,6 +402,11 @@ func resourceDnsRecordRead(ctx context.Context, d *schema.ResourceData, meta int
 	config.rateLimiter.Take()
 	zoneRead, err := cloudns.Zone{Domain: lookup.Domain}.List(&config.apiAccess)
 	if err != nil {
+		if isNotFoundError(err) {
+			d.SetId("")
+			return nil
+		}
+
 		return diag.FromErr(err)
 	}
 
@@ -722,4 +727,12 @@ func toApiRecord(d *schema.ResourceData) cloudns.Record {
 		GeodnsLocation:     geodnslocation,
 		GeodnsCode:         geodnscode,
 	}
+}
+
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errorMsg := err.Error()
+	return strings.Contains(errorMsg, "not found") || strings.Contains(errorMsg, "Missing domain-name")
 }
