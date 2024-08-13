@@ -39,7 +39,7 @@ Ensure that you have an API user/sub-user on ClouDNS (requires a paid subscripti
 
 Once that is done, you must pre-create the zones you will want to manage on ClouDNS side (technically they are manageable through the API)
 
-### Import
+### Import Records
 
 Records can be imported using:
 
@@ -63,4 +63,26 @@ resource "cloudns_dns_record" "some-record" {
 
 ```sh
 terraform import cloudns_dns_record.some-record "something.cloudns.net/123456789"
+```
+
+### Import Zones
+
+Zones can be imported using:
+
+```sh
+terraform import ADDR "domain"
+```
+
+Example zone and its import command:
+
+```hcl
+resource "cloudns_dns_zone" "some-zone" {
+  # example.com
+  domain = "example.com"
+  type   = "master"
+}
+```
+
+```sh
+terraform import cloudns_dns_zone.some-zone "example.com"
 ```
