@@ -57,8 +57,9 @@ func New() func() *schema.Provider {
 			Schema:         providerSchema,
 			DataSourcesMap: map[string]*schema.Resource{},
 			ResourcesMap: map[string]*schema.Resource{
-				"cloudns_dns_record": resourceDnsRecord(),
-				"cloudns_dns_zone":   resourceDnsZone(),
+				"cloudns_dns_record":   resourceDnsRecord(),
+				"cloudns_dns_zone":     resourceDnsZone(),
+				"cloudns_dns_failover": resourceDnsFailover(),
 			},
 		}
 
