@@ -60,7 +60,59 @@ resource "cloudns_dns_record" "some-record" {
 
 ### Optional
 
-- `priority` (Number) Priority for MX record (eg: `something.cloudns.net 600 in MX [10] mail.example.com`)
+- `value` (String) Value of the record.
+- `priority` (Int) Priority for MX record.
+- `weight` (Int) Weight for SRV record.
+- `port` (Int) Port for SRV record.
+- `frame` (String) Frame for WR record - 0 or 1 to disable or enable frame.
+- `frametitle` (String) Title if frame is enabled in Web redirects.
+- `framekeywords` (String) Keywords if frame is enabled in Web redirects.
+- `framedescription` (String) Description if frame is enabled in Web redirects.
+- `mobilemeta` (Int) Mobile responsive meta tags if Web redirects with frame is enabled. Default value - 0.
+- `savepath` (Int) 0 or 1 for Web redirects.
+- `redirecttype` (Int) 301 or 302 for Web redirects if frame is disabled.
+- `mail` (String) E-mail address for RP records.
+- `txt` (String) Domain name for TXT record used in RP records.
+- `algorithm` (Int) Algorithm used to create the SSHFP fingerprint. Required for SSHFP records only.
+- `fptype` (Int) Type of the SSHFP algorithm. Required for SSHFP records only.
+- `status` (Int) Set to 1 to create the record active or to 0 to create it inactive. If omitted the record will be created active.
+- `geodnslocation` (String) ID of a GeoDNS location for A, AAAA, CNAME, NAPTR or SRV record.
+- `geodnscode` (String) Code of a GeoDNS location for A, AAAA, CNAME, NAPTR or SRV record.
+- `caaflag` (String) 0 - Non critical or 128 - Critical.
+- `caatype` (String) Type of CAA record. The available flags are issue, issuewild, iodef.
+- `caavalue` (String) Value of the CAA record.
+- `tlsausage` (String) Shows the provided association that will be used.
+- `tlsaselector` (String) Specifies which part of the TLS certificate presented by the server will be matched against the association data.
+- `tlsamatchingtype` (String) Specifies how the certificate association is presented.
+- `smimeausage` (String) Shows the provided association that will be used.
+- `smimeaselector` (String) Specifies which part of the TLS certificate presented by the server will be matched against the association data.
+- `smimeamatchingtype` (String) Specifies how the certificate association is presented.
+- `keytag` (Int) A numeric value used for identifying the referenced DS record.
+- `digesttype` (Int) The cryptographic hash algorithm used to create the Digest value.
+- `order` (String) Specifies the order in which multiple NAPTR records must be processed (low to high).
+- `pref` (String) Specifies the order (low to high) in which NAPTR records with equal Order values should be processed.
+- `flag` (String) Controls aspects of the rewriting and interpretation of the fields in the record.
+- `params` (String) Specifies the service parameters applicable to this delegation path.
+- `regexp` (String) Contains a substitution expression that is applied to the original string, held by the client in order to construct the next domain name to lookup.
+- `replace` (String) Specifies the next domain name (fully qualified) to query for depending on the potential values found in the flags field.
+- `certtype` (Int) Type of the Certificate/CRL.
+- `certkeytag` (Int) A numeric value (0-65535), used to efficiently pick a CERT record.
+- `certalgorithm` (Int) Identifies the algorithm used to produce a legitimate signature.
+- `latdeg` (Float) A numeric value (0-90), sets the latitude degrees.
+- `latmin` (Float) A numeric value (0-59), sets the latitude minutes.
+- `latsec` (Float) A numeric value (0-59), sets the latitude seconds.
+- `latdir` (String) Sets the latitude direction. Possible values: N - North, S - South.
+- `longdeg` (Float) A numeric value (0-180), sets the longitude degrees.
+- `longmin` (Float) A numeric value (0-59), sets the longitude minutes.
+- `longsec` (Float) A numeric value (0-59), sets the longitude seconds.
+- `longdir` (String) Sets the longitude direction. Possible values: W - West, E - East.
+- `altitude` (String) A numeric value (-100000.00 - 42849672.95), sets the altitude in meters.
+- `size` (String) A numeric value (0 - 90000000.00), sets the size in meters.
+- `hprecision` (String) A numeric value (0 - 90000000.00), sets the horizontal precision in meters.
+- `vprecision` (String) A numeric value (0 - 90000000.00), sets the vertical precision in meters.
+- `cpu` (String) The CPU of the server.
+- `os` (String) The operating system of the server.
+
 
 ### Read-Only
 
