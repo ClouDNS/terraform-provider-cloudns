@@ -34,3 +34,81 @@ provider "cloudns" {
 - `password` (String, Sensitive) This is the password associated with your auth-id or sub-auth-id. It is read from the environment variable `CLOUDNS_PASSWORD` if not passed explicitly.
 - `rate_limit` (Number) Underlying rate limit (in API calls per second) to observe while interacting with ClouDNS. Defaults to 5 requests per second.
 - `sub_auth_id` (Number, Sensitive) When using api sub-users, this is the `sub-auth-id`. It is read from the environment variable `CLOUDNS_SUB_AUTH_ID` if not passed explicitly. Mutually exclusive with `auth_id`.
+
+
+### Import Records
+
+Records can be imported using:
+
+```sh
+terraform import ADDR "zone/id"
+```
+
+Example record and its import command:
+
+```hcl
+resource "cloudns_dns_record" "some-record" {
+  # ID: 123456789
+  # something.cloudns.net 600 in A 1.2.3.4
+  name  = ""
+  zone  = "something.cloudns.net"
+  type  = "A"
+  value = "1.2.3.4"
+  ttl   = "600"
+}
+```
+
+```sh
+terraform import cloudns_dns_record.some-record "something.cloudns.net/123456789"
+```
+
+### Import Zones
+
+Zones can be imported using:
+
+```sh
+terraform import ADDR "recordId"
+```
+
+The recordId is the ID of the record on which the failover is activated
+
+Example failover and its import command:
+
+```hcl
+resource "cloudns_dns_failover" "testzone-bg-http" {
+  domain            = cloudns_dns_zone.sub-testzone-bg.domain
+  recordid          = cloudns_dns_record.sub-testzone-bg-a["something"].id
+  checktype         = "9"
+  port              = "90"
+  downeventhandler = "0"
+  upeventhandler   = "0"
+  mainip            = cloudns_dns_record.sub-testzone-bg-a["something"].value
+  depends_on = [ cloudns_dns_zone.sub-testzone-bg ]
+}
+```
+
+```sh
+terraform import cloudns_dns_failover.testzone-bg-http "recordID"
+```
+
+### Import Failover
+
+Failover can be imported using:
+
+```sh
+terraform import ADDR "domain"
+```
+
+Example zone and its import command:
+
+```hcl
+resource "cloudns_dns_zone" "some-zone" {
+  # example.com
+  domain = "example.com"
+  type   = "master"
+}
+```
+
+```sh
+terraform import cloudns_dns_zone.some-zone "example.com"
+```

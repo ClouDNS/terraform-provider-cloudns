@@ -21,7 +21,7 @@ func resourceDnsFailover() *schema.Resource {
 		DeleteContext: resourceDnsFailoverDelete,
 
 		Importer: &schema.ResourceImporter{
-			StateContext: resourceDnsZoneImport,
+			StateContext: resourceDnsFailoverImport,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -233,6 +233,31 @@ func resourceDnsFailoverDelete(ctx context.Context, d *schema.ResourceData, meta
 	d.SetId("")
 
 	return nil
+}
+
+func resourceDnsFailoverImport(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	config := meta.(ClientConfig)
+	RecordId := d.Id()
+
+	config.rateLimiter.Take()
+	failoverRead, err := cloudns.Failover{RecordId: RecordId}.Read(&config.apiAccess)
+	if err != nil {
+		return nil, err
+	}
+
+	if failoverRead.RecordId == "" {
+		return nil, fmt.Errorf("Failover not found: %#v", failoverRead)
+	}
+
+	err = updateFailoverState(d, &failoverRead)
+	if err != nil {
+		return nil, err
+	}
+	d.SetId(RecordId)
+
+	tflog.Debug(ctx, fmt.Sprintf("IMPORT Failover %s", RecordId))
+
+	return []*schema.ResourceData{d}, nil
 }
 
 func toApiFailover(d *schema.ResourceData) cloudns.Failover {

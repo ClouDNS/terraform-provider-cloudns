@@ -86,3 +86,25 @@ resource "cloudns_dns_zone" "some-zone" {
 ```sh
 terraform import cloudns_dns_zone.some-zone "example.com"
 ```
+
+### Import Failover
+
+Failover can be imported using:
+
+```sh
+terraform import ADDR "domain"
+```
+
+Example zone and its import command:
+
+```hcl
+resource "cloudns_dns_zone" "some-zone" {
+  # example.com
+  domain = "example.com"
+  type   = "master"
+}
+```
+
+```sh
+terraform import cloudns_dns_zone.some-zone "example.com"
+```
