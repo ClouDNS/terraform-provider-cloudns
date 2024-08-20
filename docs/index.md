@@ -96,19 +96,25 @@ terraform import cloudns_dns_failover.testzone-bg-http "recordID"
 Failover can be imported using:
 
 ```sh
-terraform import ADDR "domain"
+terraform import ADDR recordId
 ```
 
-Example zone and its import command:
+Example failover and its import command:
 
 ```hcl
-resource "cloudns_dns_zone" "some-zone" {
-  # example.com
-  domain = "example.com"
-  type   = "master"
+resource "cloudns_dns_failover" "testzone-bg-http" {
+  #recordId = 123456789
+  domain            = cloudns_dns_zone.sub-testzone-bg.domain
+  recordid          = cloudns_dns_record.sub-testzone-bg-a["something"].id
+  checktype         = "9"
+  port              = "90"
+  downeventhandler = "0"
+  upeventhandler   = "0"
+  mainip            = cloudns_dns_record.sub-testzone-bg-a["something"].value
+  depends_on = [ cloudns_dns_zone.sub-testzone-bg ]
 }
 ```
 
 ```sh
-terraform import cloudns_dns_zone.some-zone "example.com"
+terraform import cloudns_dns_failover.testzone-bg-http 123456789
 ```
