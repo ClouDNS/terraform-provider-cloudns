@@ -225,6 +225,7 @@ func resourceDnsFailoverRead(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	tflog.Debug(ctx, fmt.Sprintf("Failover object after read: %+v", readFailover))
+	d.SetId(readFailover.ID)
 
 	err = updateFailoverState(d, &readFailover)
 	if err != nil {
