@@ -3,6 +3,7 @@ package cloudns
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/ClouDNS/cloudns-go"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -24,12 +25,6 @@ func resourceDnsFailover() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
-			"id": {
-				Description: "The name of the DNS zone.",
-				Type:        schema.TypeString,
-				Computed:    true,
-				ForceNew:    true,
-			},
 			"domain": {
 				Description: "The name of the DNS zone.",
 				Type:        schema.TypeString,
@@ -37,7 +32,7 @@ func resourceDnsFailover() *schema.Resource {
 				ForceNew:    true,
 			},
 			"recordid": {
-				Description: "The ID of the record for which the failover to be activated",
+				Description: "The ID of the record for which the failover to be activated / the same as the id param",
 				Type:        schema.TypeString,
 				Required:    true,
 				ForceNew:    true,
@@ -107,11 +102,6 @@ func resourceDnsFailover() *schema.Resource {
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
-			"deactivaterecord": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
-				Type:        schema.TypeString,
-				Optional:    true,
-			},
 			"host": {
 				Description: "A host to query.",
 				Type:        schema.TypeString,
@@ -123,52 +113,42 @@ func resourceDnsFailover() *schema.Resource {
 				Optional:    true,
 			},
 			"path": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
+				Description: "Path for the URL",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
 			"content": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
+				Description: "Parameter required for Custom HTTP and Custom HTTPS check types",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
 			"querytype": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
+				Description: "Parameter required for DNS check type. It must contain the record type (e.g. A).",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
 			"queryresponse": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
+				Description: "Parameter required for DNS check type. You must fill in the response of the DNS server for this specific record.",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
 			"latencylimit": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
+				Description: "Only for Ping monitoring checks. If the latency of the check is above the limit, the check will be marked as DOWN.",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
 			"timeout": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
-				Type:        schema.TypeString,
-				Optional:    true,
-			},
-			"state": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
-				Type:        schema.TypeString,
-				Optional:    true,
-			},
-			"status": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
+				Description: "Only for Ping monitoring checks. Seconds to wait for a response. Must be between 1 and 5. Default value is 2.",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
 			"checkregion": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
+				Description: "The region from which the check is monitored(it is only received from API)",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
 			"httprequesttype": {
-				Description: "Deactivate record if both Main IP and backup IPs are down.",
+				Description: "Only for HTTP/S checks. The request type will be used for the check. The default value is GET. Possible values:",
 				Type:        schema.TypeString,
 				Optional:    true,
 			},
@@ -225,7 +205,7 @@ func resourceDnsFailoverRead(ctx context.Context, d *schema.ResourceData, meta i
 	}
 
 	tflog.Debug(ctx, fmt.Sprintf("Failover object after read: %+v", readFailover))
-	d.SetId(readFailover.ID)
+	d.SetId(readFailover.RecordId)
 
 	err = updateFailoverState(d, &readFailover)
 	if err != nil {
@@ -256,7 +236,6 @@ func resourceDnsFailoverDelete(ctx context.Context, d *schema.ResourceData, meta
 }
 
 func toApiFailover(d *schema.ResourceData) cloudns.Failover {
-	id := d.Get("recordid").(string)
 	domain := d.Get("domain").(string)
 	recordId := d.Get("recordid").(string)
 	failoverType := d.Get("checktype").(string)
@@ -271,15 +250,12 @@ func toApiFailover(d *schema.ResourceData) cloudns.Failover {
 	monitoringRegion := d.Get("monitoringregion").(string)
 	checkPeriod := d.Get("checkperiod").(string)
 	notificationMail := d.Get("notificationmail").(string)
-	deactivateRecord := d.Get("deactivaterecord").(string)
 	host := d.Get("host").(string)
-	port := d.Get("port").(string)
+	portStr := d.Get("port").(string)
 	path := d.Get("path").(string)
 	content := d.Get("content").(string)
 	querytype := d.Get("querytype").(string)
 	queryresponse := d.Get("queryresponse").(string)
-	state := d.Get("state").(string)
-	status := d.Get("status").(string)
 	checkRegion := d.Get("checkregion").(string)
 	latencyLimit, err := d.Get("latencyLimit").(string)
 	if err {
@@ -287,6 +263,19 @@ func toApiFailover(d *schema.ResourceData) cloudns.Failover {
 	}
 	timeout := d.Get("timeout").(string)
 	httprequesttype := d.Get("httprequesttype").(string)
+
+	var port cloudns.CustomPort
+	if portInt, err := strconv.Atoi(portStr); err == nil {
+		port = cloudns.CustomPort(portInt)
+	} else {
+		if failoverType == "4" || failoverType == "6" {
+			port = 80
+		}
+
+		if failoverType == "5" || failoverType == "7" {
+			port = 443
+		}
+	}
 
 	var checkSettings = cloudns.CheckSettings{
 		Host:            host,
@@ -300,30 +289,7 @@ func toApiFailover(d *schema.ResourceData) cloudns.Failover {
 		HttpRequestType: httprequesttype,
 	}
 
-	if downEventHandler == "" {
-		downEventHandler = "0"
-	}
-	if upEventHandler == "" {
-		upEventHandler = "0"
-	}
-	if deactivateRecord == "" {
-		deactivateRecord = "0"
-	}
-	if checkSettings.Timeout == "" {
-		checkSettings.Timeout = "2"
-	}
-	if state == "" {
-		state = "0"
-	}
-	if status == "" {
-		status = "-1"
-	}
-	if checkRegion == "" {
-		status = "global"
-	}
-
 	return cloudns.Failover{
-		ID:               id,
 		Domain:           domain,
 		RecordId:         recordId,
 		FailoverType:     failoverType,
@@ -339,21 +305,12 @@ func toApiFailover(d *schema.ResourceData) cloudns.Failover {
 		CheckSettings:    checkSettings,
 		CheckPeriod:      checkPeriod,
 		NotificationMail: notificationMail,
-		State:            state,
-		Status:           status,
-		DeactivateRecord: deactivateRecord,
 		CheckRegion:      checkRegion,
 	}
 }
 
 func updateFailoverState(d *schema.ResourceData, failover *cloudns.Failover) error {
-
-	err := d.Set("id", failover.RecordId)
-	if err != nil {
-		return err
-	}
-
-	err = d.Set("domain", failover.Domain)
+	err := d.Set("domain", failover.Domain)
 	if err != nil {
 		return err
 	}
@@ -423,18 +380,12 @@ func updateFailoverState(d *schema.ResourceData, failover *cloudns.Failover) err
 		return err
 	}
 
-	err = d.Set("deactivaterecord", failover.DeactivateRecord)
-	if err != nil {
-		return err
-	}
-
 	err = d.Set("host", failover.CheckSettings.Host)
 	if err != nil {
 		return err
 	}
 
-	err = d.Set("port", failover.CheckSettings.Port)
-	if err != nil {
+	if err := d.Set("port", strconv.Itoa(int(failover.CheckSettings.Port))); err != nil {
 		return err
 	}
 
@@ -464,16 +415,6 @@ func updateFailoverState(d *schema.ResourceData, failover *cloudns.Failover) err
 	}
 
 	err = d.Set("timeout", failover.CheckSettings.Timeout)
-	if err != nil {
-		return err
-	}
-
-	err = d.Set("state", failover.State)
-	if err != nil {
-		return err
-	}
-
-	err = d.Set("status", failover.Status)
 	if err != nil {
 		return err
 	}
