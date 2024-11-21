@@ -141,12 +141,6 @@ func updateZoneState(d *schema.ResourceData, zone *cloudns.Zone) error {
 		return err
 	}
 
-	if len(zone.Ns) > 0 {
-		if err := d.Set("ns", zone.Ns); err != nil {
-			return err
-		}
-	}
-
 	if zone.Ztype == "slave" && zone.Master != "" {
 		if err := d.Set("master", zone.Master); err != nil {
 			return err

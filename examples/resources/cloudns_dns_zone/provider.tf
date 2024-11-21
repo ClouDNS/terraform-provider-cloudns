@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     cloudns = {
-      source = "cloudns/cloudns"
+      source = "registry.terraform.io/cloudns/cloudns"
       version = "1.0.0"
     }
   }
