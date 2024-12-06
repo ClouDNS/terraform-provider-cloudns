@@ -32,7 +32,7 @@ resource "cloudns_dns_failover" "testzone-bg-http" {
   mainip            = cloudns_dns_record.sub-testzone-bg-a["something"].value
   depends_on = [ cloudns_dns_zone.sub-testzone-bg ]
 }
-
+```
 
 ## Schema
 
