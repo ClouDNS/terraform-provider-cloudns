@@ -79,7 +79,6 @@ func resourceDnsZoneCreate(ctx context.Context, d *schema.ResourceData, meta int
 	zoneToCreate := toApiZone(d)
 
 	// Determine (and eventually sort) NS records
-	var ns []string
 	_, nsExist := d.GetOk("nameservers")
 	_, nstExist := d.GetOk("nameserver_type")
 	if nsExist || nstExist {
@@ -93,10 +92,10 @@ func resourceDnsZoneCreate(ctx context.Context, d *schema.ResourceData, meta int
 		return diag.FromErr(err)
 	}
 
-	if len(ns) == 0 {
+	if len(zoneToCreate.Ns) == 0 {
 		tflog.Debug(ctx, fmt.Sprintf("CREATE DNS zone: %s, type: %s", resp.Domain, resp.Ztype))
 	} else {
-		tflog.Debug(ctx, fmt.Sprintf("CREATE DNS zone: %s, type: %s, ns: %s", resp.Domain, resp.Ztype, strings.Join(ns, ", ")))
+		tflog.Debug(ctx, fmt.Sprintf("CREATE DNS zone: %s, type: %s, ns: %s", resp.Domain, resp.Ztype, strings.Join(zoneToCreate.Ns, ", ")))
 	}
 
 	d.SetId(zoneToCreate.Domain)
@@ -226,6 +225,7 @@ func getNsNames(d *schema.ResourceData, nsList []cloudns.Ns) []string {
 		for _, rec := range ns.([]interface{}) {
 			rns = append(rns, rec.(string))
 		}
+		rns = sortNsNames(rns)
 		return slices.CompactFunc(rns, strings.EqualFold)
 	}
 
@@ -242,8 +242,8 @@ func getNsNames(d *schema.ResourceData, nsList []cloudns.Ns) []string {
 	}
 
 	// we compact and sort NS records to avoid creating diffs should there be changes in the API response
-	fns = slices.CompactFunc(fns, strings.EqualFold)
 	fns = sortNsNames(fns)
+	fns = slices.CompactFunc(fns, strings.EqualFold)
 
 	return fns
 }
