@@ -226,6 +226,7 @@ func getNsNames(d *schema.ResourceData, nsList []cloudns.Ns) []string {
 		for _, rec := range ns.([]interface{}) {
 			rns = append(rns, rec.(string))
 		}
+		rns = sortNsNames(rns)
 		return slices.CompactFunc(rns, strings.EqualFold)
 	}
 
@@ -242,8 +243,8 @@ func getNsNames(d *schema.ResourceData, nsList []cloudns.Ns) []string {
 	}
 
 	// we compact and sort NS records to avoid creating diffs should there be changes in the API response
-	fns = slices.CompactFunc(fns, strings.EqualFold)
 	fns = sortNsNames(fns)
+	fns = slices.CompactFunc(fns, strings.EqualFold)
 
 	return fns
 }
