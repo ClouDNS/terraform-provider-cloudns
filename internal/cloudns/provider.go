@@ -60,6 +60,7 @@ func New() func() *schema.Provider {
 				"cloudns_dns_record":   resourceDnsRecord(),
 				"cloudns_dns_zone":     resourceDnsZone(),
 				"cloudns_dns_failover": resourceDnsFailover(),
+				"cloudns_dynamic_url":  resourceDynamicUrl(),
 			},
 		}
 
