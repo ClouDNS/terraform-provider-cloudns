@@ -16,7 +16,6 @@ func resourceDynamicUrl() *schema.Resource {
 
 		CreateContext: resourceDynamicUrlGetOrCreate,
 		ReadContext:   resourceDynamicUrlGetOrCreate,
-		UpdateContext: resourceDynamicUrlGetOrCreate,
 		DeleteContext: resourceDynamicUrlDelete,
 
 		Schema: map[string]*schema.Schema{
