@@ -12,7 +12,7 @@ import (
 
 func resourceDynamicUrl() *schema.Resource {
 	return &schema.Resource{
-		Description: "A dynamic URL for an A or AAAA record managed by ClouDNS.",
+		Description: "A dynamic URL for an A or AAAA record managed by ClouDNS. The generated URL authorizes dynamic DNS updates without additional authentication. Treat it as a credential and do not expose it in logs, outputs, or source control.",
 
 		CreateContext: resourceDynamicUrlGetOrCreate,
 		ReadContext:   resourceDynamicUrlGetOrCreate,
@@ -26,15 +26,16 @@ func resourceDynamicUrl() *schema.Resource {
 				ForceNew:    true,
 			},
 			"recordid": {
-				Description: "The ID of the record for which the dynamic URL should be enabled / the same as the id param",
+				Description: "The ID of the record for which the dynamic URL should be enabled.",
 				Type:        schema.TypeString,
 				Required:    true,
 				ForceNew:    true,
 			},
 			"url": {
-				Description: "The URL to which the dynamic DNS request will be sent.",
+				Description: "The secret URL to which the dynamic DNS update request will be sent. Treat this value as a credential.",
 				Type:        schema.TypeString,
 				Computed:    true,
+				Sensitive:   true,
 			},
 		},
 	}
@@ -44,7 +45,7 @@ func resourceDynamicUrlGetOrCreate(ctx context.Context, d *schema.ResourceData, 
 	config := meta.(ClientConfig)
 	dynUrl := toApiDynamicUrl(d)
 
-	tflog.Debug(ctx, fmt.Sprintf("Dynamic URL object before read: %+v", dynUrl))
+	tflog.Debug(ctx, "Reading dynamic URL")
 
 	config.rateLimiter.Take()
 
@@ -58,7 +59,12 @@ func resourceDynamicUrlGetOrCreate(ctx context.Context, d *schema.ResourceData, 
 		return diag.FromErr(err)
 	}
 
-	tflog.Debug(ctx, fmt.Sprintf("Dynamic URL object after read: %+v", readDynUrl))
+	// The response contains the dynamic update URL, which acts as a credential.
+	// Do not include it in logs, even at debug level.
+	tflog.Debug(ctx, "Dynamic URL read successfully", map[string]interface{}{
+		"domain":   readDynUrl.Domain,
+		"recordid": readDynUrl.RecordId,
+	})
 	d.SetId(readDynUrl.RecordId)
 
 	err = updateDynamicUrlState(d, &readDynUrl)

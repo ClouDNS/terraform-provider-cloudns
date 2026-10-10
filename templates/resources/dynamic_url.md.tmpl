@@ -1,0 +1,36 @@
+---
+page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
+subcategory: ""
+description: |-
+{{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+{{ .Description }}
+
+Use this resource with an existing A or AAAA record. Creating or reading it
+retrieves the current Dynamic DNS URL, generating one if necessary. Changing
+`domain` or `recordid` replaces the resource. Destroying it disables Dynamic DNS
+for the record without deleting the DNS record. Import is not supported.
+
+## Sensitive URL and Terraform state
+
+Anyone with the URL can update the DNS record without additional authentication.
+The `url` attribute is sensitive, so Terraform redacts it in standard plan and
+apply output. Outputs referencing it must also set `sensitive = true`.
+This does **not** remove the URL from Terraform state or saved plan files, and
+does not encrypt it. Protect those files and restrict access to the state backend.
+Commands such as `terraform output -raw dynamic_url` or `terraform output -json`
+can reveal sensitive values. Do not publish the URL in logs or source control.
+
+## Example Usage
+
+Configure the ClouDNS provider using your usual environment-based authentication
+and set `domain` to an existing zone in your account. The example creates an A
+record with a documentation-only IP address and enables Dynamic DNS for it.
+Use an AAAA record and an appropriate IPv6 address for IPv6 updates.
+
+{{ tffile .ExampleFile }}
+
+{{ .SchemaMarkdown | trimspace }}
