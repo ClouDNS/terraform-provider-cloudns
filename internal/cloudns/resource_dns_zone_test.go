@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ClouDNS/cloudns-go"
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
@@ -13,7 +12,7 @@ import (
 func TestAccDnsZone_basic(t *testing.T) {
 	testUuid := uuid.NewString()
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
@@ -29,7 +28,7 @@ func TestAccDnsZone_basic(t *testing.T) {
 func zone(resourceName string, name string) string {
 	return fmt.Sprintf(`
 resource "cloudns_dns_zone" "%s" {
-    name = "%s"
+    domain = "%s"
     type = "master"
 }
 `, resourceName, name)
@@ -38,7 +37,7 @@ resource "cloudns_dns_zone" "%s" {
 func checkZone(resourceName string, name string) resource.TestCheckFunc {
 	path := fmt.Sprintf("cloudns_dns_zone.%s", resourceName)
 	return resource.ComposeTestCheckFunc(
-		resource.TestCheckResourceAttr(path, "name", name),
+		resource.TestCheckResourceAttr(path, "domain", name),
 		resource.TestCheckResourceAttr(path, "type", "master"),
 	)
 }
@@ -46,7 +45,7 @@ func checkZone(resourceName string, name string) resource.TestCheckFunc {
 func CheckDestroyedZones(state *terraform.State) error {
 	provider := testAccProvider
 	apiAccess := provider.Meta().(ClientConfig).apiAccess
-	zones, err := cloudns.Zone{}.List(&apiAccess)
+	zones, err := apiAccess.Listzones()
 
 	if err != nil {
 		return err
@@ -60,11 +59,11 @@ func CheckDestroyedZones(state *terraform.State) error {
 		fmt.Printf("Checking that cloudns_dns_zone#%s was properly deleted\n", rs.Primary.ID)
 
 		for _, zone := range zones {
-			existingZoneId := zone.ID
+			existingZoneId := zone.Domain
 			if rs.Primary.ID == existingZoneId {
 				return fmt.Errorf(
 					"zone %s still exists",
-					zone.ID,
+					zone.Domain,
 				)
 			}
 		}

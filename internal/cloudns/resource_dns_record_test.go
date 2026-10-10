@@ -61,7 +61,7 @@ func TestAccDnsARecord(t *testing.T) {
 	initialRecordValue := "1.2.3.4"
 	updatedRecordValue := "5.6.7.8"
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
@@ -85,7 +85,7 @@ func TestAccDnsARecordMultiMatch(t *testing.T) {
 	r1res := record("A", "some-record-1", testUuid, r1value)
 	r2res := record("A", "some-record-2", testUuid, r2value)
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
@@ -106,7 +106,7 @@ func TestAccDnsCNAMERecord(t *testing.T) {
 	initialRecordValue := fmt.Sprintf("target-init.%s", testZone)
 	updatedRecordValue := fmt.Sprintf("target-updated.%s", testZone)
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
@@ -128,7 +128,7 @@ func TestAccDnsMXRecord(t *testing.T) {
 	initialRecordValue := fmt.Sprintf("target-init.%s", testZone)
 	updatedRecordValue := fmt.Sprintf("target-updated.%s", testZone)
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
@@ -148,7 +148,7 @@ func TestAccDnsMXRecord(t *testing.T) {
 func TestAccDnsImportMXRecord(t *testing.T) {
 	testUuid := uuid.NewString()
 
-	resource.UnitTest(t, resource.TestCase{
+	resource.Test(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
 		ProviderFactories: providerFactories,
 		Steps: []resource.TestStep{
