@@ -1,0 +1,32 @@
+---
+{{ .YAMLFrontMatter }}
+---
+
+# {{ .Name }} ({{ .Type }})
+
+{{ .Description }}
+
+Use one DNSSEC resource per existing zone. Enabling signing waits for DS and
+DNSKEY records to be generated, with a default create/update timeout of five
+minutes. Read refreshes signing, opt-out and key data from ClouDNS, including
+changes made outside Terraform. `opt_out = true` requires `enabled = true`.
+
+This resource manages zone signing only. Publish the exported DS (and DNSKEY,
+if required) at your registrar to establish the chain of trust. Before setting
+`enabled = false` or destroying this resource, remove DS records at the registrar
+and wait for cached DS records to expire. Destroy disables signing without
+removing the DNS zone. Avoid `create_before_destroy` when replacing this resource
+with another resource managing the same zone.
+
+## Example Usage
+
+{{ tffile .ExampleFile }}
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+Import using the DNS zone name. Import reads the current enabled and opt-out state.
+Set those values in your configuration to avoid changing signing on the next apply.
+
+{{ codefile "shell" .ImportFile }}
