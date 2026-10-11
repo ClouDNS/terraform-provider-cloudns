@@ -1,0 +1,32 @@
+name: Provider CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.14.0
+          terraform_wrapper: false
+      - name: Unit and regression tests
+        run: go test ./... -count=1
+      - name: Build production provider
+        run: go build -o "$RUNNER_TEMP/terraform-provider-cloudns" .
+      - name: Build isolated CLI test provider
+        run: |
+          mkdir -p "$RUNNER_TEMP/cloudns-cli"
+          go build -o "$RUNNER_TEMP/cloudns-cli/terraform-provider-cloudns" ./tests/cli-provider
+      - name: Terraform CLI import and TTL plan/apply/plan (simulated API)
+        run: python3 tests/geodns_ttl_cli.py
+        env:
+          CLOUDNS_TF_DEV_PROVIDER_DIR: ${{ runner.temp }}/cloudns-cli
