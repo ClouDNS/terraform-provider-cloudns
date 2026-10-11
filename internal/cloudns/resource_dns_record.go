@@ -149,9 +149,10 @@ func resourceDnsRecord() *schema.Resource {
 				ForceNew:    false,
 			},
 			"geodnslocation": {
-				Description: "ID of a GeoDNS location for A, AAAA, CNAME, NAPTR or SRV record. The GeoDNS locations can be obtained with List GeoDNS locations",
+				Description: "ID of a GeoDNS location for A, AAAA, ALIAS, CNAME, NAPTR or SRV record. Read from the API when omitted; updates preserve the existing location unless a location change is requested.",
 				Type:        schema.TypeString,
 				Optional:    true,
+				Computed:    true,
 				ForceNew:    false,
 			},
 			"geodnscode": {
@@ -426,6 +427,34 @@ func resourceDnsRecordRead(ctx context.Context, d *schema.ResourceData, meta int
 func resourceDnsRecordUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	config := meta.(ClientConfig)
 	record := toApiRecord(d)
+	locationChanged := d.HasChange("geodnslocation") && record.GeodnsLocation != ""
+	codeChanged := d.HasChange("geodnscode") && record.GeodnsCode != ""
+	if !locationChanged && !codeChanged {
+		// Omitting the GeoDNS location resets it to DEFAULT. Read by ID rather
+		// than name/value so sibling records and stale state cannot move it.
+		config.rateLimiter.Take()
+		records, err := (cloudns.Zone{Domain: record.Domain}).List(&config.apiAccess)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		found := false
+		for _, current := range records {
+			if current.ID == record.ID {
+				record.GeodnsLocation = current.GeodnsLocation
+				record.GeodnsCode = ""
+				found = true
+				break
+			}
+		}
+		if !found {
+			return diag.Errorf("DNS record %s not found in zone %s; refusing update", record.ID, record.Domain)
+		}
+	} else if codeChanged && !locationChanged {
+		// A computed ID from the previous location must not override a new code.
+		record.GeodnsLocation = ""
+	} else if locationChanged && !codeChanged {
+		record.GeodnsCode = ""
+	}
 
 	tflog.Debug(ctx, fmt.Sprintf("UPDATE %s.%s %d in %s %s", record.Host, record.Domain, record.TTL, record.Rtype, record.Record))
 
@@ -460,6 +489,14 @@ func resourceDnsRecordValidate(ctx context.Context, d *schema.ResourceDiff, meta
 	_, isPriorityProvided := d.GetOkExists("priority")
 	if rtype == "MX" && !isPriorityProvided {
 		return fmt.Errorf("Priority is required for MX record")
+	}
+	if d.HasChange("geodnscode") && d.Get("geodnscode").(string) != "" && !d.HasChange("geodnslocation") {
+		config := d.GetRawConfig()
+		if config.IsNull() || !config.IsKnown() || config.GetAttr("geodnslocation").IsNull() {
+			// A new code resolves to a new computed ID; the plan must not promise
+			// that the previous ID will survive the intentional location change.
+			return d.SetNewComputed("geodnslocation")
+		}
 	}
 	return nil
 }
@@ -525,6 +562,10 @@ func updateState(d *schema.ResourceData, zoneRecord *cloudns.Record) error {
 	}
 
 	err = d.Set("ttl", zoneRecord.TTL)
+	if err != nil {
+		return err
+	}
+	err = d.Set("geodnslocation", zoneRecord.GeodnsLocation)
 	if err != nil {
 		return err
 	}
