@@ -1,3 +1,10 @@
+## 1.3.1 (2026-10-11)
+
+- Preserve the existing GeoDNS location when updating TTL or other record fields without requesting a new location (#53).
+- Capture the location ID during refresh/import; allow explicit location ID/code changes to converge.
+- Read the current location by exact record ID and fail before modification if the record cannot be read.
+- Add real Terraform CLI import/plan/apply/plan CI coverage using an isolated API simulator, alongside opt-in real API SDK checks.
+
 ## 1.3.0 (2026-10-10)
 
 - Mark the `cloudns_dynamic_url` URL as sensitive and remove full response debug logging (#50).

@@ -69,6 +69,32 @@ resource "cloudns_dns_record" "some-record" {
 
 ## Argument Reference
 
+### GeoDNS TTL changes
+
+For GeoDNS records, `geodnslocation` is captured during refresh and import even
+when omitted from configuration. An update that does not request a new location
+reads the current record by ID and explicitly sends its existing location to the
+API. Changing `ttl` therefore preserves the GeoDNS location and record ID.
+
+```terraform
+resource "cloudns_dns_record" "regional" {
+  zone       = "example.org"
+  name       = "regional"
+  type       = "A"
+  value      = "192.0.2.1"
+  ttl        = 3600
+  geodnscode = "EUR"
+}
+```
+
+For an imported record, both GeoDNS arguments may be omitted to preserve its
+existing location. Removing an optional location argument also preserves the
+current location. To intentionally move to the default location, specify
+`geodnscode = "DEFAULT"` or `geodnslocation = "1"`.
+
+The current-record lookup adds one API read to updates without an explicit
+location change. A failed lookup or missing record ID prevents the update.
+
 Some more information available in the [API documentation][1].
 
 The following arguments are required:
@@ -96,7 +122,7 @@ The following arguments are optional:
 - `algorithm` (Optional) Algorithm used to create the SSHFP fingerprint. Required for SSHFP records only.
 - `fptype` (Optional) Type of the SSHFP algorithm. Required for SSHFP records only.
 - `status` (Optional) The status of the record being created. Valid values are `0` (inactive) or `1` (active.) If omitted the record will be created active.
-- `geodnslocation` (Optional) ID of a GeoDNS location for `A`, `AAAA`, `CNAME`, `NAPTR`, or `SRV` record types.
+- `geodnslocation` (Optional, Computed) ID of a GeoDNS location for `A`, `AAAA`, `ALIAS`, `CNAME`, `NAPTR`, or `SRV` record types. When omitted, the existing API location is captured during refresh and import.
 - `geodnscode` (Optional) Code of a GeoDNS location for `A`, `AAAA`, `CNAME`, `NAPTR`, or `SRV` record types.
 - `caaflag` (Optional) 0 - Non critical or 128 - Critical.
 - `caatype` (Optional) Type of CAA record. The available values are `"issue"`, `"issuewild"`,  and `"iodef"`.
