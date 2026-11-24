@@ -1,5 +1,9 @@
 ## Unreleased
 
+- Add the `cloudns_dynamic_url` data source for existing A and AAAA records with Dynamic DNS enabled (#26).
+
+## Unreleased
+
 - Add opt-in `allow_overwrite` to `cloudns_dns_record` to take over one matching existing record by ID (#29).
 
 ## 1.3.1 (2026-10-11)

@@ -54,8 +54,10 @@ func New() func() *schema.Provider {
 		}
 
 		p := &schema.Provider{
-			Schema:         providerSchema,
-			DataSourcesMap: map[string]*schema.Resource{},
+			Schema: providerSchema,
+			DataSourcesMap: map[string]*schema.Resource{
+				"cloudns_dynamic_url": dataSourceDynamicURL(),
+			},
 			ResourcesMap: map[string]*schema.Resource{
 				"cloudns_dns_record":   resourceDnsRecord(),
 				"cloudns_dns_zone":     resourceDnsZone(),
