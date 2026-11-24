@@ -31,7 +31,10 @@ func resourceDnsRecord() *schema.Resource {
 				Description: "The name of the record",
 				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    false,
+				DiffSuppressFunc: func(_ string, old, new string, _ *schema.ResourceData) bool {
+					return sameDNSRecordHost(old, new)
+				},
+				DiffSuppressOnRefresh: true,
 			},
 			"zone": {
 				Description: "The zone on which to add the record",
@@ -49,13 +52,22 @@ func resourceDnsRecord() *schema.Resource {
 				Description: "The type of record",
 				Type:        schema.TypeString,
 				Required:    true,
-				ForceNew:    false,
+				DiffSuppressFunc: func(_ string, old, new string, _ *schema.ResourceData) bool {
+					return strings.EqualFold(old, new)
+				},
+				DiffSuppressOnRefresh: true,
 			},
 			"value": {
 				Description: "Value of the record",
 				Type:        schema.TypeString,
 				Optional:    true,
 				ForceNew:    false,
+			},
+			"allow_overwrite": {
+				Description: "Allow creation to take over a single existing record with the same name, type and GeoDNS location. Defaults to false.",
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
 			},
 			"priority": {
 				Description:      "Priority for MX record",
@@ -373,6 +385,16 @@ func resourceDnsRecordCreate(ctx context.Context, d *schema.ResourceData, meta i
 	clientConfig := meta.(ClientConfig)
 	recordToCreate := toApiRecord(d)
 
+	if d.Get("allow_overwrite").(bool) {
+		existing, err := findDNSRecordToOverwrite(ctx, clientConfig, recordToCreate)
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		if existing != nil {
+			return overwriteDNSRecord(ctx, d, clientConfig, recordToCreate, *existing)
+		}
+	}
+
 	tflog.Debug(ctx, fmt.Sprintf("CREATE %s.%s %d in %s %s", recordToCreate.Host, recordToCreate.Domain, recordToCreate.TTL, recordToCreate.Rtype, recordToCreate.Record))
 
 	clientConfig.rateLimiter.Take()
@@ -425,6 +447,10 @@ func resourceDnsRecordRead(ctx context.Context, d *schema.ResourceData, meta int
 }
 
 func resourceDnsRecordUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	if d.HasChange("allow_overwrite") && !d.HasChangesExcept("allow_overwrite") {
+		return nil
+	}
+
 	config := meta.(ClientConfig)
 	record := toApiRecord(d)
 	locationChanged := d.HasChange("geodnslocation") && record.GeodnsLocation != ""
@@ -485,7 +511,7 @@ func resourceDnsRecordDelete(ctx context.Context, d *schema.ResourceData, meta i
 }
 
 func resourceDnsRecordValidate(ctx context.Context, d *schema.ResourceDiff, meta interface{}) error {
-	rtype := d.Get("type").(string)
+	rtype := strings.ToUpper(d.Get("type").(string))
 	_, isPriorityProvided := d.GetOkExists("priority")
 	if rtype == "MX" && !isPriorityProvided {
 		return fmt.Errorf("Priority is required for MX record")
@@ -577,14 +603,15 @@ func updateState(d *schema.ResourceData, zoneRecord *cloudns.Record) error {
 		}
 	}
 
-	return nil
+	// Populate the schema default in imported and older state.
+	return d.Set("allow_overwrite", d.Get("allow_overwrite"))
 }
 
 func toApiRecord(d *schema.ResourceData) cloudns.Record {
 	id := d.Id()
 	name := d.Get("name").(string)
 	zone := d.Get("zone").(string)
-	rtype := d.Get("type").(string)
+	rtype := strings.ToUpper(d.Get("type").(string))
 	value := d.Get("value").(string)
 	ttl := d.Get("ttl").(int)
 	priority := 0

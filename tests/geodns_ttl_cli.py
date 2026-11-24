@@ -7,6 +7,9 @@ import copy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+from pathlib import Path
+import subprocess
+import tempfile
 from threading import Thread, Lock
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
@@ -24,6 +27,8 @@ class API(BaseHTTPRequestHandler):
     baseline = copy.deepcopy(rows)
     sequence = 100
     lock = Lock()
+    writes = []
+    fail_endpoint = None
 
     def log_message(self, *args):
         pass
@@ -40,6 +45,9 @@ class API(BaseHTTPRequestHandler):
         try:
             assert str(p.get('sub-auth-id')) == '42' and p.get('auth-password') == 'synthetic-test-password'
             assert p.get('domain-name') == 'example.test'
+            if endpoint in ('add-record', 'mod-record', 'delete-record'):
+                self.writes.append((endpoint, str(p.get('record-id', ''))))
+            assert endpoint != self.fail_endpoint, 'Simulated API failure'
             if endpoint == 'get-geodns-locations':
                 result = [{'code': code, 'id': loc} for code, loc in LOCATIONS.items()]
             elif endpoint == 'get-available-ttl':
@@ -84,6 +92,96 @@ class API(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def test_allow_overwrite():
+    fixtures = {
+        '9101': ('Terraform-Geo-Overwrite', '5'),
+        '9102': ('terraform-geo-overwrite', '1'),
+        '9103': ('terraform-geo-ambiguous', '1'),
+        '9104': ('terraform-geo-ambiguous', '1'),
+        '9105': ('terraform-geo-opt-out', '1'),
+        '9106': ('', '1'),
+    }
+    for key, (host, location) in fixtures.items():
+        API.rows[key] = {'id': key, 'host': host, 'type': 'A', 'record': '192.0.2.1',
+                         'ttl': '300', 'geodns-location': location}
+    initial = copy.deepcopy(API.rows)
+    record = {'zone': 'example.test', 'type': 'A', 'value': '192.0.2.10', 'ttl': 3600}
+    specs = {
+        'adopted': dict(record, name='terraform-geo-overwrite', geodnscode='EUR', allow_overwrite=True),
+        'apex': dict(record, name='@', allow_overwrite=True),
+        'created': dict(record, name='terraform-geo-create-if-missing', allow_overwrite=True),
+        'opt_out': dict(record, name='terraform-geo-opt-out'),
+    }
+    with tempfile.TemporaryDirectory(prefix='cloudns-overwrite-') as directory:
+        work = Path(directory)
+        cli_config = work / 'dev.tfrc'
+        provider_dir = str(Path(os.environ['CLOUDNS_TF_DEV_PROVIDER_DIR']).resolve())
+        cli_config.write_text('provider_installation {\n dev_overrides {\n'
+                              ' "ClouDNS/cloudns" = ' + json.dumps(provider_dir) + '\n }\n}\n')
+        env = dict(os.environ, TF_CLI_CONFIG_FILE=str(cli_config), TF_INPUT='0', CHECKPOINT_DISABLE='1')
+
+        def write_config(records):
+            (work / 'main.tf.json').write_text(json.dumps({
+                'terraform': {'required_providers': {'cloudns': {'source': 'ClouDNS/cloudns'}}},
+                'provider': {'cloudns': {}}, 'resource': {'cloudns_dns_record': records},
+            }))
+
+        def terraform(*args, expected=0):
+            result = subprocess.run([os.environ.get('TERRAFORM_BINARY', 'terraform'), *args],
+                                    cwd=work, env=env, capture_output=True, text=True, timeout=60)
+            assert result.returncode == expected, result.stdout + result.stderr
+            return result
+
+        write_config(specs)
+        terraform('apply', '-auto-approve', '-parallelism=1', '-no-color')
+        state = json.loads(terraform('show', '-json').stdout)
+        resources = state['values']['root_module']['resources']
+        ids = {resource['name']: resource['values']['id'] for resource in resources}
+        assert ids['adopted'] == '9101' and ids['apex'] == '9106', ids
+        assert ids['created'] not in initial and ids['opt_out'] not in initial, ids
+        for name in ('adopted', 'apex'):
+            row = API.rows[ids[name]]
+            assert row['record'] == '192.0.2.10' and row['ttl'] == '3600', row
+        assert API.rows['9101']['geodns-location'] == '5'
+        assert API.rows['9102'] == initial['9102'] and API.rows['9105'] == initial['9105']
+        terraform('plan', '-detailed-exitcode', '-no-color')
+
+        writes = len(API.writes)
+        specs['adopted'].pop('allow_overwrite')
+        write_config(specs)
+        terraform('apply', '-auto-approve', '-no-color')
+        assert len(API.writes) == writes, API.writes[writes:]
+        terraform('plan', '-detailed-exitcode', '-no-color')
+
+        terraform('destroy', '-auto-approve', '-no-color')
+        assert not set(ids.values()) & API.rows.keys()
+        unchanged = {key: row for key, row in initial.items() if key not in ids.values()}
+        assert API.rows == unchanged
+
+        writes = len(API.writes)
+        write_config({'ambiguous': dict(record, name='terraform-geo-ambiguous', allow_overwrite=True)})
+        failed = terraform('apply', '-auto-approve', '-no-color', expected=1)
+        assert 'multiple A DNS records match' in failed.stderr
+        assert len(API.writes) == writes
+
+        write_config({'status': dict(record, name='terraform-geo-opt-out', status=0, allow_overwrite=True)})
+        failed = terraform('apply', '-auto-approve', '-no-color', expected=1)
+        assert 'cannot set status' in failed.stderr
+        assert len(API.writes) == writes
+
+        write_config({'existing': dict(record, name='terraform-geo-opt-out', allow_overwrite=True)})
+        try:
+            for endpoint, attempts in (('records', []), ('mod-record', [('mod-record', '9105')])):
+                API.fail_endpoint = endpoint
+                failed = terraform('apply', '-auto-approve', '-no-color', expected=1)
+                assert 'Simulated API failure' in failed.stderr
+                assert API.writes[writes:] == attempts
+                assert API.rows == unchanged
+        finally:
+            API.fail_endpoint = None
+        print('Overwrite: adoption, create fallback, opt-out, no-op plan, and API failure guards verified', flush=True)
+
+
 def main():
     server = ThreadingHTTPServer(('127.0.0.1', 0), API)
     endpoint = 'http://127.0.0.1:' + str(server.server_port)
@@ -100,6 +198,7 @@ def main():
     try:
         live.main()
         assert API.rows == API.baseline
+        test_allow_overwrite()
     finally:
         server.shutdown()
         server.server_close()

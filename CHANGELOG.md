@@ -1,3 +1,7 @@
+## Unreleased
+
+- Add opt-in `allow_overwrite` to `cloudns_dns_record` to take over one matching existing record by ID (#29).
+
 ## 1.3.1 (2026-10-11)
 
 - Preserve the existing GeoDNS location when updating TTL or other record fields without requesting a new location (#53).

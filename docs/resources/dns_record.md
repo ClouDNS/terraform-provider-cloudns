@@ -69,6 +69,34 @@ resource "cloudns_dns_record" "some-record" {
 
 ## Argument Reference
 
+### Taking over an existing record
+
+Set `allow_overwrite = true` to manage an existing record on the first apply.
+
+```terraform
+resource "cloudns_dns_record" "www" {
+  zone            = "example.org"
+  name            = "www"
+  type            = "A"
+  value           = "192.0.2.10"
+  ttl             = 300
+  allow_overwrite = true
+}
+```
+
+Terraform matches one record by its zone, host, type, and GeoDNS location.
+If no location is specified, the lookup uses the default location. With no
+matching record the provider creates one. With exactly one match the provider
+updates that record and stores its existing ID. With multiple matches, use
+`terraform import cloudns_dns_record.www <zone>/<id>` to select the intended
+record. Use import to adopt existing CERT or LOC records. Overwrite also
+rejects an explicit `status` because it cannot change record activation.
+
+An adopted record is deleted on `terraform destroy`. Manage each record from
+one resource and one state. Avoid `create_before_destroy` for replacements
+with the same zone, host, type, and location, because both resource instances
+could reference the same record ID.
+
 ### GeoDNS TTL changes
 
 For GeoDNS records, `geodnslocation` is captured during refresh and import even
@@ -107,6 +135,7 @@ The following arguments are required:
 
 The following arguments are optional:
 
+- `allow_overwrite` (Optional) Allow creation to take over one existing DNS record. Defaults to `false`. Updates to an already managed record continue to use its stored ID.
 - `priority` (Optional) Priority for MX or SRV record.
 - `weight` (Optional) Weight for SRV record.
 - `port` (Optional) Port for SRV record.
