@@ -58,6 +58,33 @@ resource "cloudns_dns_zone" "cloudns-net" {
 ```
 
 
+## Keep a DNS zone on destroy
+
+With Terraform 1.16 or later, set `lifecycle.destroy = false` on a zone
+that should stay in ClouDNS when you run `terraform destroy`. Terraform
+removes the zone from state and deletes the DNS records managed by that
+configuration as usual.
+
+```terraform
+resource "cloudns_dns_zone" "example" {
+  domain = "example.com"
+  type   = "master"
+
+  lifecycle {
+    destroy = false
+  }
+}
+```
+
+For an existing zone, import it before the first apply. If you want to manage
+the zone again after a destroy, reimport it before applying the same
+configuration.
+
+With Terraform 1.7 through 1.15, you can use a
+[`removed` block with `destroy = false`][3] to take an imported zone out of
+state. Change any references to the zone resource to use the zone name, and
+apply the state removal before running destroy.
+
 ## Argument Reference
 
 Some more information available in the [API documentation][1].
@@ -98,3 +125,4 @@ Using `terraform import`, import DNS zones using the `domain`. For example:
 
 [1]: https://www.cloudns.net/wiki/article/48/
 [2]: https://developer.hashicorp.com/terraform/language/import
+[3]: https://developer.hashicorp.com/terraform/language/state/remove
