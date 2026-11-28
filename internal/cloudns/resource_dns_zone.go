@@ -2,12 +2,18 @@ package cloudns
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ClouDNS/cloudns-go"
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -21,6 +27,7 @@ func resourceDnsZone() *schema.Resource {
 		ReadContext:   resourceDnsZoneRead,
 		UpdateContext: resourceDnsZoneUpdate,
 		DeleteContext: resourceDnsZoneDelete,
+		CustomizeDiff: resourceDnsZoneCustomizeDiff,
 
 		Importer: &schema.ResourceImporter{
 			StateContext: resourceDnsZoneImport,
@@ -87,7 +94,13 @@ func resourceDnsZoneCreate(ctx context.Context, d *schema.ResourceData, meta int
 		d.Set("nameservers", zoneToCreate.Ns)
 	}
 
-	resp, err := zoneToCreate.Create(&clientConfig.apiAccess)
+	resp := zoneToCreate
+	var err error
+	if zoneToCreate.Ztype == "master" && hasEmptyNameserverList(d.GetRawConfig()) {
+		err = createZoneWithoutNS(ctx, clientConfig, zoneToCreate.Domain)
+	} else {
+		resp, err = zoneToCreate.Create(&clientConfig.apiAccess)
+	}
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -100,6 +113,72 @@ func resourceDnsZoneCreate(ctx context.Context, d *schema.ResourceData, meta int
 
 	d.SetId(zoneToCreate.Domain)
 	return resourceDnsZoneRead(ctx, d, meta)
+}
+
+func resourceDnsZoneCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	if d.Get("type") != "master" || !hasEmptyNameserverList(d.GetRawConfig()) {
+		return nil
+	}
+	if _, configured := d.GetOk("nameserver_type"); configured {
+		return fmt.Errorf("nameserver_type cannot be combined with an empty nameservers list")
+	}
+	if d.Id() != "" {
+		// An empty list controls the initial records. NS records added later
+		// must not cause the whole zone to be replaced.
+		return d.Clear("nameservers")
+	}
+	return nil
+}
+
+func hasEmptyNameserverList(config cty.Value) bool {
+	if config.IsNull() || !config.IsKnown() {
+		return false
+	}
+	nameservers := config.GetAttr("nameservers")
+	return nameservers.IsKnown() && !nameservers.IsNull() && nameservers.LengthInt() == 0
+}
+
+func createZoneWithoutNS(ctx context.Context, config ClientConfig, domain string) error {
+	fields := url.Values{
+		"auth-password": {config.apiAccess.Authpassword},
+		"domain-name":   {domain},
+		"zone-type":     {"master"},
+		// The API uses default NS records when "ns": [] is sent as JSON.
+		"ns[]": {""},
+	}
+	if config.apiAccess.Authid != 0 {
+		fields.Set("auth-id", strconv.Itoa(config.apiAccess.Authid))
+	} else {
+		fields.Set("sub-auth-id", strconv.Itoa(config.apiAccess.Subauthid))
+	}
+	config.rateLimiter.Take()
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.cloudns.net/dns/register.json", strings.NewReader(fields.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	response, err := http.DefaultTransport.RoundTrip(req)
+	if err != nil {
+		return fmt.Errorf("create DNS zone %s without NS records: %w", domain, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("create DNS zone %s without NS records: HTTP %d", domain, response.StatusCode)
+	}
+	var result struct {
+		Status      string `json:"status"`
+		Description string `json:"statusDescription"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		return fmt.Errorf("create DNS zone %s without NS records: invalid API response: %w", domain, err)
+	}
+	if result.Status != "Success" {
+		return fmt.Errorf("create DNS zone %s without NS records: API rejected request: %s", domain, result.Description)
+	}
+	return nil
 }
 
 func resourceDnsZoneRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -124,8 +203,10 @@ func resourceDnsZoneRead(ctx context.Context, d *schema.ResourceData, meta inter
 	}
 
 	nsRecords, err := getFilteredZoneRecords(zoneToRead, clientConfig, []string{"NS"})
-	if err == nil && len(nsRecords) > 0 {
+	if err == nil && (zoneRead.Ztype == "master" || len(nsRecords) > 0) {
 		zoneRead.Ns = sortNsNames(nsRecords)
+	} else if zoneRead.Ztype == "master" && slices.Equal(zoneRead.Ns, []string{""}) {
+		zoneRead.Ns = nil
 	}
 
 	d.Set("domain", zoneRead.Domain)
@@ -170,8 +251,10 @@ func resourceDnsZoneImport(ctx context.Context, d *schema.ResourceData, meta int
 	}
 
 	nsRecords, err := getFilteredZoneRecords(zoneToRead, clientConfig, []string{"NS"})
-	if err == nil && len(nsRecords) > 0 {
+	if err == nil && (zoneRead.Ztype == "master" || len(nsRecords) > 0) {
 		zoneRead.Ns = sortNsNames(nsRecords)
+	} else if zoneRead.Ztype == "master" && slices.Equal(zoneRead.Ns, []string{""}) {
+		zoneRead.Ns = nil
 	}
 
 	err = updateZoneState(d, &zoneRead)

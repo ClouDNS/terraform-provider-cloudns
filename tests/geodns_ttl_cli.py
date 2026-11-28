@@ -29,6 +29,8 @@ class API(BaseHTTPRequestHandler):
     lock = Lock()
     writes = []
     fail_endpoint = None
+    zones = {}
+    zone_requests = {}
 
     def log_message(self, *args):
         pass
@@ -44,7 +46,14 @@ class API(BaseHTTPRequestHandler):
         endpoint = self.path.rsplit('/', 1)[-1].removesuffix('.json')
         try:
             assert str(p.get('sub-auth-id')) == '42' and p.get('auth-password') == 'synthetic-test-password'
-            assert p.get('domain-name') == 'example.test'
+            if endpoint == 'available-name-servers':
+                self.send_json([])
+                return
+            domain = p.get('domain-name', p.get('search', ''))
+            if domain.endswith('.zone.example.test'):
+                self.send_json(self.zone_response(endpoint, domain, p))
+                return
+            assert domain == 'example.test'
             if endpoint in ('add-record', 'mod-record', 'delete-record'):
                 self.writes.append((endpoint, str(p.get('record-id', ''))))
             assert endpoint != self.fail_endpoint, 'Simulated API failure'
@@ -84,6 +93,29 @@ class API(BaseHTTPRequestHandler):
                 raise AssertionError('Unexpected endpoint: ' + endpoint)
         except (AssertionError, KeyError) as error:
             result = {'status': 'Failed', 'statusDescription': str(error)}
+        self.send_json(result)
+
+    def zone_response(self, endpoint, domain, params):
+        if endpoint == 'register':
+            assert params.get('zone-type') == 'master'
+            self.zone_requests.setdefault(domain, []).append((self.headers.get_content_type(), params))
+            if domain == 'rejected.zone.example.test':
+                return {'status': 'Failed', 'statusDescription': 'Empty zone registration rejected'}
+            if params.get('ns[]') == '':
+                self.zones[domain] = []
+            else:
+                self.zones[domain] = params.get('ns') or ['ns1.default.example.test']
+            return {'status': 'Success'}
+        if endpoint == 'list-zones':
+            return [{'name': domain, 'type': 'master'}]
+        if endpoint == 'records':
+            if not self.zones[domain]:
+                return []
+            return {str(i): {'id': str(i), 'type': 'NS', 'host': '', 'ttl': '3600', 'record': ns}
+                    for i, ns in enumerate(self.zones[domain], 1)}
+        raise AssertionError('Unexpected zone endpoint: ' + endpoint)
+
+    def send_json(self, result):
         body = json.dumps(result).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
@@ -182,6 +214,67 @@ def test_allow_overwrite():
         print('Overwrite: adoption, create fallback, opt-out, no-op plan, and API failure guards verified', flush=True)
 
 
+def test_empty_zone():
+    configs = {
+        'omitted': {},
+        'null': {'nameservers': None},
+        'empty': {'nameservers': []},
+        'explicit': {'nameservers': ['ns1.custom.example.test']},
+    }
+    domains = {name: name + '.zone.example.test' for name in configs}
+    with tempfile.TemporaryDirectory(prefix='cloudns-zone-') as directory:
+        work = Path(directory)
+        provider_dir = str(Path(os.environ['CLOUDNS_TF_DEV_PROVIDER_DIR']).resolve())
+        cli_config = work / 'dev.tfrc'
+        cli_config.write_text('provider_installation {\n dev_overrides {\n'
+                              ' "ClouDNS/cloudns" = ' + json.dumps(provider_dir) + '\n }\n}\n')
+        env = dict(os.environ, TF_CLI_CONFIG_FILE=str(cli_config), TF_INPUT='0', CHECKPOINT_DISABLE='1')
+        def write_config(zones):
+            (work / 'main.tf.json').write_text(json.dumps({
+                'terraform': {'required_providers': {'cloudns': {'source': 'ClouDNS/cloudns'}}},
+                'resource': {'cloudns_dns_zone': {
+                    name: dict(params, domain=name + '.zone.example.test', type='master')
+                    for name, params in zones.items()
+                }},
+            }))
+
+        def terraform(*args, expected=0):
+            result = subprocess.run([os.environ.get('TERRAFORM_BINARY', 'terraform'), *args],
+                                    cwd=work, env=env, capture_output=True, text=True, timeout=60)
+            assert result.returncode == expected, result.stdout + result.stderr
+            return result
+
+        write_config(configs)
+        terraform('apply', '-auto-approve', '-no-color')
+        for name in ('omitted', 'null'):
+            [(content_type, request)] = API.zone_requests[domains[name]]
+            assert content_type == 'application/json' and 'ns' not in request, request
+        [(content_type, request)] = API.zone_requests[domains['empty']]
+        assert content_type == 'application/x-www-form-urlencoded' and request['ns[]'] == '', request
+        [(content_type, request)] = API.zone_requests[domains['explicit']]
+        assert content_type == 'application/json' and request['ns'] == configs['explicit']['nameservers'], request
+        state = json.loads(terraform('show', '-json').stdout)
+        nameservers = {resource['name']: resource['values']['nameservers']
+                       for resource in state['values']['root_module']['resources']}
+        assert nameservers['empty'] == [], nameservers
+        terraform('plan', '-detailed-exitcode', '-no-color')
+        API.zones[domains['empty']] = ['ns1.managed.example.test']
+        terraform('plan', '-detailed-exitcode', '-no-color')
+
+        write_config(dict(configs, conflict={'nameservers': [], 'nameserver_type': 'all'}))
+        failed = terraform('apply', '-auto-approve', '-no-color', expected=1)
+        assert 'nameserver_type' in failed.stderr and 'nameservers' in failed.stderr, failed.stderr
+        assert 'conflict.zone.example.test' not in API.zone_requests
+
+        write_config(dict(configs, rejected={'nameservers': []}))
+        failed = terraform('apply', '-auto-approve', '-no-color', expected=1)
+        assert 'Empty zone registration rejected' in failed.stderr, failed.stderr
+        [(content_type, request)] = API.zone_requests['rejected.zone.example.test']
+        assert content_type == 'application/x-www-form-urlencoded' and request['ns[]'] == '', request
+        assert 'rejected.zone.example.test' not in API.zones
+        print('Master zones: default, empty, custom, conflict and API rejection verified', flush=True)
+
+
 def main():
     server = ThreadingHTTPServer(('127.0.0.1', 0), API)
     endpoint = 'http://127.0.0.1:' + str(server.server_port)
@@ -199,6 +292,7 @@ def main():
         live.main()
         assert API.rows == API.baseline
         test_allow_overwrite()
+        test_empty_zone()
     finally:
         server.shutdown()
         server.server_close()

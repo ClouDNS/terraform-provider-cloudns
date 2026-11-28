@@ -58,6 +58,20 @@ resource "cloudns_dns_zone" "cloudns-net" {
 ```
 
 
+### Master zone without initial NS records
+
+```terraform
+resource "cloudns_dns_zone" "example" {
+  domain      = "example.com"
+  type        = "master"
+  nameservers = []
+}
+```
+
+Omit `nameservers` to use the default NS records. An empty list applies
+only when creating a zone. You can manage its NS records separately with
+`cloudns_dns_record`.
+
 ## Keep a DNS zone on destroy
 
 With Terraform 1.16 or later, set `lifecycle.destroy = false` on a zone
@@ -98,7 +112,7 @@ The following arguments are optional:
 
 * `master`- (Optional) The IP of the master server. Required if `type` is `"slave"`.
 * `nameserver_type` - (Optional) The type of nameservers to assign to the zone upon creation. Valid values are `"all"`, `"free"`, and `"premium"`. Changing this will force a new resource be created.
-* `nameservers` - (Optional) The nameservers to assign to the zone upon creation. Setting this will overwrite the setting of `nameserver_type`. Changing this will force a new resource be created.
+* `nameservers` - (Optional) The nameservers to assign to the zone upon creation. For master zones, `[]` skips initial NS records. This argument conflicts with `nameserver_type`. Changes to a nonempty list require replacing the zone.
 
 
 ## Attribute Reference
