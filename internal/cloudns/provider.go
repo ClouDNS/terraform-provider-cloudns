@@ -59,11 +59,12 @@ func New() func() *schema.Provider {
 				"cloudns_dynamic_url": dataSourceDynamicURL(),
 			},
 			ResourcesMap: map[string]*schema.Resource{
-				"cloudns_dns_record":   resourceDnsRecord(),
-				"cloudns_dns_zone":     resourceDnsZone(),
-				"cloudns_dns_dnssec":   resourceDnsDNSSEC(),
-				"cloudns_dns_failover": resourceDnsFailover(),
-				"cloudns_dynamic_url":  resourceDynamicUrl(),
+				"cloudns_dns_record":       resourceDnsRecord(),
+				"cloudns_dns_zone":         resourceDnsZone(),
+				"cloudns_dns_dnssec":       resourceDnsDNSSEC(),
+				"cloudns_dns_failover":     resourceDnsFailover(),
+				"cloudns_dynamic_url":      resourceDynamicUrl(),
+				"cloudns_monitoring_check": resourceMonitoringCheck(),
 			},
 		}
 
